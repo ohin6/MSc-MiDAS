@@ -12,10 +12,14 @@ vignette: >
 ```{r setup, include = FALSE}
 knitr::opts_chunk$set(collapse = TRUE)
 
+BiocManager::install("midasHLA")
+
 library("dplyr")
 library("kableExtra")
 library("knitr")
 library("midasHLA")
+BiocManager::install("midasHLA")
+
 ```
 
 # Introduction
@@ -27,8 +31,10 @@ MiDAS is a comprehensive R package for immunogenetic data manipulation and stati
 `MiDAS` includes functions to read HLA and KIR typing data, checking for the correct format and adherence to the right nomenclature. HLA calls can be reduced to a desired resolution when importing it, e.g. from 6-digit to 4-digit. Phenotypic observations can be read e.g. using the `read.table` function (make sure to include `stringsAsFactors = FALSE` argument).
 
 ```{r load_pheno, echo=TRUE, warning=FALSE}
-pheno_file <- system.file("extdata", "MiDAS_tut_pheno.txt", package = "midasHLA")
-pheno <- read.table(pheno_file, header = TRUE, stringsAsFactors = FALSE)
+setwd("/Users/owen/Library/Mobile Documents/com~apple~CloudDocs/midasHLA")
+getwd()
+pheno= read.table("/Users/owen/Library/Mobile Documents/com~apple~CloudDocs/midasHLA/inst/extdata/MiDAS_tut_pheno.txt", header = T, stringsAsFactors = F)
+
 ```
 
 ```{r show_pheno, echo=FALSE, warning=FALSE}
