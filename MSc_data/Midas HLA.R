@@ -185,6 +185,6 @@ MiDASGeno4=tibble(MiDASGeno4)
 MiDASGeno4 = mutate(MiDASGeno4, across(everything(), ~ fun_insert(.x,str_length(.x)-2,':')))
 
 # Export data table
-write_tsv(MiDASGeno4, "MiDASGeno.txt")
+write_tsv(MiDASGeno4, "HLA_files/MiDASGeno.txt")
 
 
