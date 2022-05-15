@@ -9,130 +9,159 @@ library("knitr")
 library("midasHLA")
 BiocManager::install("midasHLA")
 
-```
-
 
 ## Reading phenotype  data
 getwd()
+#import phenotype data
 Brainpheno= read_csv("Pheno_data/BrainPathology_tidyApoe.csv")
+# Import HLA typing file as filepath
+hla_calls_file <- "HLA_files/MiDASGeno.txt"
 
-```
-
-```{r show_pheno, echo=FALSE, warning=FALSE}
-Brainpheno %>%
-  head(10) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
-```
-
-```{r load_hla, echo=TRUE, warning=FALSE}
-# HLA calls can be loaded using the readHlaCalls function with the desired resolution
-hla_calls_file <- system.file("extdata", "MiDAS_tut_HLA.txt", package = "midasHLA")
-hla_calls_file <- system.file("HLA_files", "MiDAS_tut_HLA.txt", package = "midasHLA")
-
+## Change HLA typing resolution as specified
+#An error occurred because one HLA type had a space at end. To fix manually change
 hla_calls <- readHlaCalls(hla_calls_file, resolution = 4)
-```
 
-```{r show_hla, echo=FALSE, warning=FALSE}
-hla_calls %>%
-  head(10) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
-  scroll_box(width = "100%", height = "200px")
-```
+## Compare allele frequencies,
+# can change which HLA allele and population
+freq_HLA <- getHlaFrequencies(hla_calls = hla_calls, compare = TRUE) %>%
+  filter(Freq > 0.01)
 
-```{r load_kir, echo=TRUE, warning=FALSE}
-# KIR calls (currently presence/absence calls, no allele-level resolution) can be loaded using the readKirCalls function
-kir_calls_file <- system.file("extdata", "MiDAS_tut_KIR.txt", package = "midasHLA")
-kir_calls <- readKirCalls(kir_calls_file)
-```
+freq_HLA_long <- tidyr::gather(
+  data = freq_HLA,
+  key = "population",
+  value = "freq",
+  "Freq",
+  "USA NMDP European Caucasian",
+  "USA NMDP Chinese",
+  "USA NMDP African American pop 2",
+  factor_key = TRUE
+) %>% 
+  filter(grepl("^C", allele))
 
-```{r show_kir, echo=FALSE, warning=FALSE}
-kir_calls %>%
-  head(10) %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
-  scroll_box(width = "100%", height = "200px")
-```
+plot_HLAfreq <-
+  ggplot2::ggplot(data = freq_HLA_long, ggplot2::aes(x = allele, y = freq, fill = population)) +
+  ggplot2::geom_bar(
+    stat = "identity",
+    position = ggplot2::position_dodge(0.7),
+    width = 0.7,
+    colour = "black"
+  ) +
+  ggplot2::coord_flip() +
+  ggplot2::scale_y_continuous(labels = formattable::percent)
 
-For convenience, we will here use test data shipped with the package.
+plot_HLAfreq
 
-```{r test_data, echo=TRUE, warning=FALSE}
-HLA <- reduceHlaCalls(MiDAS_tut_HLA, resolution = 4)
-KIR <- MiDAS_tut_KIR
-pheno <- MiDAS_tut_pheno
-```
+## HLA association analysis
+#modify BrainPheno data to be compatible to analysis
+Brainpheno2 = Brainpheno %>%
+  add_column(ID = Brainpheno$IID) %>%
+  select(ID,BraakStage)
 
-## Creating midas objects
-`MiDAS` provides the `prepareMiDAS` function to combine genetic and phenotypic data for subsequent analysis. In this step, it is also possible to infer amino acid level information from HLA calls, encode HLA-KIR interactions, or calculate HLA evolutionary divergence (`experiment` argument).
-
-```{r creating_midas_data_set, echo=TRUE, warning=FALSE}
-midas <- prepareMiDAS(
-  hla_calls = HLA,
-  kir_calls = KIR,
-  colData = pheno,
-  experiment = c("hla_alleles", "hla_aa")
+# Prepare MiDAS
+HLA <- prepareMiDAS(
+  hla_calls = hla_calls,
+  colData = Brainpheno2,
+  experiment = "hla_alleles"
 )
-```
 
-## MiDAS object
-A MiDAS object contains our input data as well as defined transformations. This is an extension of a `MultiAssayExperiment` and can be handled as
-such. `MiDAS` provides some functions to interact with `MiDAS` objects (check `?MiDAS-class` for a full list).
-
-For example, we can explore the HLA alleles frequencies, compare them with published frequencies from the allelefrequencies.net database, and filter out low frequency alleles.
-
-```{r get_freq, echo=TRUE, warning=FALSE}
-freq <- getFrequencies(
-  object = midas,
-  carrier_frequency = FALSE,
+HLA <- HWETest(
+  object = HLA,
   experiment = "hla_alleles",
-  compare = TRUE
+  HWE_cutoff = 0.05 / 447,
+  as.MiDAS = TRUE
 )
-```
 
-```{r show_freq, echo=FALSE, warning=FALSE}
-kable(freq) %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
-  scroll_box(width = "100%", height = "200px")
-```
+HLA_model <- glm(BraakStage ~ term, data = HLA, family = gaussian())
+HLA_results <- runMiDAS(
+  object = HLA_model, 
+  experiment = "hla_alleles", 
+  inheritance_model = "additive",
+  lower_frequency_cutoff = 0.02, 
+  upper_frequency_cutoff = 0.98, 
+  correction = "hommel", 
+  exponentiate = TRUE
+)
 
-```{r filter_freq, echo=TRUE, warning=FALSE}
-midas <-
-  filterByFrequency(
-    object = midas,
-    experiment = "hla_alleles",
-    lower_frequency_cutoff = 0.01
-  )
-```
+kableResults(HLA_results)
 
-## Association analysis
-### Model definition
-Before the actual analysis can be run, we still need to define a statistical model we would like to use. We can use most of the statistical models available in R, such as `lm`, `glm`, `coxme` etc. (technically, they need to have a tidy method available).
-`MiDAS` then provides a wrapper function that will evaluate our model for
-each HLA allele in our data.
+HLA_results_cond <- runMiDAS(
+  object = HLA_model, 
+  experiment = "hla_alleles", 
+  inheritance_model = "additive", 
+  conditional = TRUE,
+  lower_frequency_cutoff = 0.02, 
+  upper_frequency_cutoff = 0.98, 
+  correction = "hommel", 
+  exponentiate = TRUE
+)
 
-Here we will use a very simple formula `disease ~ term`, term being a placeholder for each tested HLA allele. This notation is necessary to also allow interaction tests (e.g. `disease ~ lab_value:term`) and also works with other appropriate operations.
+kableResults(HLA_results_cond, scroll_box_height = "200px")
 
-`midas` has to be passed as a `data` argument to our statistical function, here `glm`.
 
-```{r model definition, echo=TRUE, warning=FALSE}
-# Logistic regression
-object <- glm(disease ~ term, data = midas, family = binomial(link = "logit"))
-```
 
-### Running analysis
-To run our analysis, we will use the `runMiDAS` function. This function offers multiple analysis scenarios which can be tuned using `conditional` and `omnibus` arguments. It can also pre-filter input data based on frequency (check `?runMiDAS` to learn more).
 
-```{r association_analysis, echo=TRUE, warning=FALSE}
-results <-
-  runMiDAS(
-    object = object,
-    experiment = "hla_alleles",
-    inheritance_model = "dominant",
-    conditional = FALSE,
-    omnibus = FALSE,
-    lower_frequency_cutoff = 0.05
-  )
 
-kableResults(results)
-```
+#allelic divergence
+
+HLA_het <- prepareMiDAS(
+  hla_calls = hla_calls, 
+  colData = Brainpheno2, 
+  experiment = c("hla_het","hla_divergence")
+)
+
+HLA_het_model <- glm(BraakStage ~ term, data=HLA_het, family=gaussian())
+
+HLA_het_results <- runMiDAS(HLA_het_model, 
+                            experiment = "hla_het", 
+                            exponentiate = TRUE
+)
+
+kableResults(HLA_het_results)
+
+HLA_div_results <- runMiDAS(HLA_het_model, 
+                            experiment = "hla_divergence", 
+                            exponentiate = TRUE
+)
+
+kableResults(HLA_div_results, scroll_box_height = "250px")
+
+#### super types
+Super <- prepareMiDAS(
+  hla_calls = hla_calls,
+  colData = Brainpheno2,
+  experiment = "hla_supertypes"
+)
+
+Super <- HWETest(
+  object = Super,
+  experiment = "hla_supertypes",
+  HWE_cutoff = 0.05 / 447,
+  as.MiDAS = TRUE
+)
+
+HLA_model <- glm(BraakStage ~ term, data = Super, family = gaussian())
+HLA_results <- runMiDAS(
+  object = HLA_model, 
+  experiment = "hla_supertypes", 
+  inheritance_model = "additive",
+  lower_frequency_cutoff = 0.02, 
+  upper_frequency_cutoff = 0.98, 
+  correction = "fdr", 
+  exponentiate = TRUE
+)
+
+kableResults(HLA_results)
+
+HLA_results_cond <- runMiDAS(
+  object = HLA_model, 
+  experiment = "hla_supertypes", 
+  inheritance_model = "additive", 
+  conditional = TRUE,
+  lower_frequency_cutoff = 0.02, 
+  upper_frequency_cutoff = 0.98, 
+  correction = "hommel", 
+  exponentiate = TRUE
+)
+
+kableResults(HLA_results_cond, scroll_box_height = "200px")
+

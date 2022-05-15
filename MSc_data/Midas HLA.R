@@ -184,6 +184,11 @@ MiDASGeno4=tibble(MiDASGeno4)
 # Add : to second from last charcter of string
 MiDASGeno4 = mutate(MiDASGeno4, across(everything(), ~ fun_insert(.x,str_length(.x)-2,':')))
 
+# add ID column
+MiDASGeno4 = MiDASGeno4 %>%
+  add_column(ID = genotypes$ID, .before = 'A_1')
+  
+
 # Export data table
 write_tsv(MiDASGeno4, "HLA_files/MiDASGeno.txt")
 
