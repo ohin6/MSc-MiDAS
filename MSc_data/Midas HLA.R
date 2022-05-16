@@ -99,7 +99,7 @@ for (i in 1:patientIds){
 colnames(MiDASGeno4) = c("A_1", "A_2", "C_1", "C_2", "B_1", "B_2", "DRB1_1", "DRB1_2","DQA1_1", "DQA1_2", "DQB1_1", "DQB1_2", "DPA1_1", "DPA1_2","DPB1_1", "DPB1_2")
 
 
-##### Because they're seems to be errors genotyping file where numerous alleles are detected, a bit of fidging needs to be done
+##### Because they're seems to be errors genotyping file where numerous alleles are detected, a bit of fudging needs to be done
 
 
 MiDASGeno4[53,] = c("HLA_A_0101", "HLA_A_0102", "HLA_C_0501", "HLA_C_1202", "HLA_B_4402", "HLA_B_5201", "HLA_DRB1_1301","HLA_DRB1_1502","HLA_DQA1_0103","HLA_DQA1_0103", "HLA_DQB1_0601","HLA_DQB1_0603","HLA_DPA1_0103","HLA_DPA1_0201","HLA_DPB1_0401","HLA_DPB1_1701")
